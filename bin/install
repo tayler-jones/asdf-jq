@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-# Shamelessly stolen from https://github.com/beardix/asdf-yq/blob/master/bin/list-all#L7
-# Thank you for your great and simple work
-
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -10,32 +7,39 @@ set -o pipefail
 readonly BINARY_NAME="jq"
 readonly DOWNLOAD_BASE_URL="https://github.com/stedolan/jq/releases/download"
 
-readonly TMP_DOWNLOAD_DIR="$(mktemp -d)"
-trap 'rm -rf "${TMP_DOWNLOAD_DIR?}"' EXIT
-
 error_exit() {
   echo "$1" >&2
   exit "${2:-1}"
 }
 
-platform() {
-  local -r os=$(
-    case "$(uname | tr '[:upper:]' '[:lower:]')" in
-      darwin) echo "osx" ;;
-      *) echo "linux" ;;
-    esac
-  )
+MACHINE="$(uname -m)"
+case "${MACHINE}" in
+    x86_64) ;;
+    *) echo "Unknown machine architecture: ${MACHINE}"
+       exit 1
+esac
 
-  echo "${os}-amd64"
-}
+KERNEL_NAME="$(uname -s)"
+case "${KERNEL_NAME}" in
+    Darwin) readonly PLATFORM="osx-amd64"
+            readonly TEMP_DIR=$(/usr/bin/mktemp -dt asdf-jq)
+            ;;
+    Linux) readonly PLATFORM="linux-amd64"
+           readonly TEMP_DIR=$(mktemp -dp /tmp asdf-jq.XXXXXXXX)
+           ;;
+    *) echo "Unknown operating system: ${KERNEL_NAME}"
+       exit 1
+esac
+
+trap 'test -d "${TEMP_DIR}" && rm -rf "${TEMP_DIR}"' EXIT
 
 install() {
   local -r install_type="$1"
   local -r install_version="$2"
   local -r install_path="$3"
   local -r install_path_bin="${install_path}/bin"
-  local -r download_url="${DOWNLOAD_BASE_URL}/${install_version}/${BINARY_NAME}-$(platform)"
-  local -r download_path="${TMP_DOWNLOAD_DIR}/${BINARY_NAME}"
+  local -r download_url="${DOWNLOAD_BASE_URL}/${install_version}/${BINARY_NAME}-${PLATFORM}"
+  local -r download_path="${TEMP_DIR}/${BINARY_NAME}"
 
   [ "$install_type" != "version" ] && error_exit "Error: source installs are not supported"
 
